@@ -1,0 +1,135 @@
+<div class="layout">
+  <header class="hero">
+    <h1>Juego de Drones</h1>
+    <p class="subtitle">Dos jugadores, un teclado. Primero en ganar 3 rondas es el nuevo emperador.</p>
+  </header>
+
+  <aside class="panel stats" *ngIf="stats.length">
+    <h2>Historial de victorias</h2>
+    <p class="hint">Partidas completadas registradas en el servidor.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Jugador</th>
+          <th>Partidas ganadas</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let s of stats">
+          <td>{{ s.name }}</td>
+          <td>{{ s.gamesWon }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </aside>
+
+  <section class="panel main-card">
+    <p class="error" *ngIf="error">{{ error }}</p>
+
+    <div *ngIf="phase === 'intro'" class="screen">
+      <h2>Bienvenida</h2>
+      <p>Compartís el mismo equipo: cada jugador elige su movimiento sin que el otro vea la pantalla.</p>
+      <button type="button" class="primary" (click)="startFlow()">Iniciar</button>
+    </div>
+
+    <div *ngIf="phase === 'names'" class="screen">
+      <h2>Nombres de los jugadores</h2>
+      <label class="field">
+        <span>Jugador 1</span>
+        <input type="text" [(ngModel)]="player1Name" name="p1" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>Jugador 2</span>
+        <input type="text" [(ngModel)]="player2Name" name="p2" autocomplete="off" />
+      </label>
+      <button type="button" class="primary" (click)="beginMatch()">Comenzar partida</button>
+    </div>
+
+    <div *ngIf="phase === 'play'" class="screen play">
+      <div class="play-head">
+        <div>
+          <h2>Ronda {{ round }}</h2>
+          <p class="turn">Turno de: <strong>{{ currentPlayerLabel() }}</strong></p>
+        </div>
+        <div class="score-pill">
+          <span>{{ player1Name.trim() }}: {{ p1Wins }}</span>
+          <span class="sep">·</span>
+          <span>{{ player2Name.trim() }}: {{ p2Wins }}</span>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>Elegí movimiento</span>
+        <select [(ngModel)]="currentMove" name="move">
+          <option *ngFor="let m of moveOptions" [ngValue]="m">{{ m }}</option>
+        </select>
+      </label>
+      <button type="button" class="primary" (click)="confirmMove()">Confirmar</button>
+
+      <div class="round-table" *ngIf="roundRows.length">
+        <h3>Marcador de rondas</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Ronda</th>
+              <th>Resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of roundRows">
+              <td>{{ row.round }}</td>
+              <td>{{ row.label }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div *ngIf="phase === 'gameover'" class="screen">
+      <h2>¡Hay un ganador!</h2>
+      <p class="winner-line"><strong>{{ winnerName }}</strong> es el nuevo emperador.</p>
+      <div class="row-actions">
+        <button type="button" class="primary" [disabled]="loading" (click)="playAgain()">
+          {{ loading ? 'Guardando…' : 'Jugar de nuevo' }}
+        </button>
+        <button type="button" class="ghost" (click)="openRules()">Editar reglas de movimientos</button>
+      </div>
+    </div>
+
+    <div *ngIf="phase === 'rules'" class="screen rules">
+      <h2>Reglas dinámicas</h2>
+      <p class="hint">
+        Cada fila indica qué movimiento derrota a cuál. Podés añadir más movimientos formando una cadena (como en el ejemplo del enunciado).
+      </p>
+
+      <div class="add-row">
+        <input type="text" [(ngModel)]="newKiller" name="nk" placeholder="Movimiento ganador" />
+        <span class="arrow">mata a →</span>
+        <input type="text" [(ngModel)]="newDefeated" name="nd" placeholder="Movimiento derrotado" />
+        <button type="button" (click)="addRuleRow()">Añadir</button>
+      </div>
+
+      <table *ngIf="rulesDraft.length">
+        <thead>
+          <tr>
+            <th>Ganador</th>
+            <th>Derrotado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of rulesDraft; let i = index">
+            <td>{{ r.killer }}</td>
+            <td>{{ r.defeated }}</td>
+            <td><button type="button" class="link" (click)="removeRuleRow(i)">Quitar</button></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="row-actions">
+        <button type="button" class="primary" [disabled]="loading" (click)="saveRules()">Guardar reglas</button>
+        <button type="button" class="ghost" (click)="backFromRules()">Cancelar</button>
+      </div>
+    </div>
+  </section>
+</div>

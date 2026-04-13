@@ -1,0 +1,27 @@
+## .NET
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+## Database (SQLite local)
+*.db
+*.db-shm
+*.db-wal
+
+## Node / Angular
+ClientApp/node_modules/
+ClientApp/dist/
+npm-debug.log*
+yarn-error.log*
+
+## Angular output dentro de wwwroot (regenerar con `npm run build:api` en ClientApp)
+Server/GameOfDrones.Api/wwwroot/**
+!Server/GameOfDrones.Api/wwwroot/.gitkeep
+
+## OS
+Thumbs.db
+Desktop.ini
