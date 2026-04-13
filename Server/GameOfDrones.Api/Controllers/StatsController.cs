@@ -1,6 +1,7 @@
 using GameOfDrones.Api.Contracts;
 using GameOfDrones.Api.Data;
 using GameOfDrones.Api.Models;
+using GameOfDrones.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,6 +37,8 @@ public class StatsController : ControllerBase
         var raw = body.WinnerName?.Trim() ?? string.Empty;
         if (string.IsNullOrEmpty(raw))
             return BadRequest("Nombre del ganador requerido.");
+        if (!PlayerNameValidation.TryValidate(raw, out var errWinner))
+            return BadRequest(errWinner);
 
         var key = raw.ToLowerInvariant();
 

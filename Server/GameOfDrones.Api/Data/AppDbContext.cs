@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<Move> Moves => Set<Move>();
     public DbSet<KillRule> KillRules => Set<KillRule>();
     public DbSet<PlayerStat> PlayerStats => Set<PlayerStat>();
+    public DbSet<GameRoom> GameRooms => Set<GameRoom>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,6 +40,21 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.NormalizedName).IsUnique();
             e.Property(x => x.NormalizedName).HasMaxLength(128).IsRequired();
             e.Property(x => x.DisplayName).HasMaxLength(128).IsRequired();
+        });
+
+        modelBuilder.Entity<GameRoom>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(8);
+            e.Property(x => x.Player1Name).HasMaxLength(128).IsRequired();
+            e.Property(x => x.Player2Name).HasMaxLength(128);
+            e.Property(x => x.Phase).HasMaxLength(32).IsRequired();
+            e.Property(x => x.PendingP1Move).HasMaxLength(64);
+            e.Property(x => x.PendingP2Move).HasMaxLength(64);
+            e.Property(x => x.ResolvedLabel).HasMaxLength(128);
+            e.Property(x => x.ResolvedP1Move).HasMaxLength(64);
+            e.Property(x => x.ResolvedP2Move).HasMaxLength(64);
+            e.Property(x => x.WinnerName).HasMaxLength(128);
         });
     }
 }

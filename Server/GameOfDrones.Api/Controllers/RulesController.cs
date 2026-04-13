@@ -97,4 +97,19 @@ public class RulesController : ControllerBase
 
         return Ok(new RulesResponseDto(response));
     }
+
+    [HttpPost("reset")]
+    public async Task<ActionResult<RulesResponseDto>> ResetToClassic(CancellationToken ct)
+    {
+        await RulesSeed.ResetToClassicRulesAsync(_db, ct);
+
+        var rules = await _db.KillRules
+            .AsNoTracking()
+            .Include(k => k.KillerMove)
+            .Include(k => k.DefeatedMove)
+            .Select(k => new MoveRuleDto(k.KillerMove.Name, k.DefeatedMove.Name))
+            .ToListAsync(ct);
+
+        return Ok(new RulesResponseDto(rules));
+    }
 }
