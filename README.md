@@ -100,17 +100,3 @@ y reiniciá la API.
 En desarrollo, **Swagger** está en `/swagger`.
 
 La cadena de conexión y CORS se configuran en `appsettings.json` o variables de entorno (`ConnectionStrings__DefaultConnection`, etc.).
-
----
-
-## Publicar en un servidor
-
-1. En `ClientApp`: `npm install` y `npm run build:api`.
-2. `dotnet publish` del proyecto **GameOfDrones.Api**.
-3. Servir el contenido de `wwwroot/browser` como estáticos junto a la API (mismo host que el front).
-
----
-
-## Licencia / uso
-
-Proyecto de evaluación técnica; ajustá licencia o uso según tu organización.
