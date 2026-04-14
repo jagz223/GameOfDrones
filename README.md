@@ -1,6 +1,8 @@
 # Juego de Drones
 
-Solución técnica: **Angular 19** (front) + **ASP.NET Core 8** (API) + **Entity Framework Core** + **SQLite**. Incluye partida local (2 jugadores en la misma PC), modo online opcional, reglas de movimientos configurables en tiempo de ejecución y persistencia de victorias por jugador.
+Solución técnica: **Angular 19** (front) + **ASP.NET Core 8** (API) + **Entity Framework Core** + **SQLite**. Incluye partida local (dos jugadores en la misma PC), modo online opcional, reglas configurables en tiempo de ejecución (cada movimiento puede vencer a varios rivales), **empates entre movimientos distintos** además del empate por mismo nombre, y persistencia de victorias por jugador.
+
+Al **añadir un movimiento nuevo** desde la pantalla de reglas, para cada movimiento ya definido se elige si el nuevo **le gana**, **pierde contra él** o **empata**: hay que cubrir todos para que no queden enfrentamientos sin definir. Los pares de empate también se listan y guardan con el resto de reglas.
 
 ---
 
@@ -8,6 +10,30 @@ Solución técnica: **Angular 19** (front) + **ASP.NET Core 8** (API) + **Entity
 
 - **Repositorio (GitHub):** `https://github.com/jagz223/GameOfDrones`
 - **Juego en producción (opcional):** *aún no disponible; se publicará más adelante.*
+
+---
+
+## Docker (imagen local)
+
+En la raíz del repositorio (donde está `Dockerfile`):
+
+```bash
+docker build -t game-of-drones .
+docker run --rm -p 8080:8080 -e PORT=8080 game-of-drones
+```
+
+La API escucha en `http://localhost:8080`. Render (y otros hosts) inyectan `PORT` automáticamente; la aplicación ya lo lee en `Program.cs`.
+
+---
+
+## Despliegue en Render
+
+1. Conectá el repositorio en [Render](https://render.com) y creá un **Web Service** con **Docker**.
+2. Dejá **Root Directory** vacío si el repo es solo este proyecto; si el código vive en un subdirectorio de un monorepo, configurá ese path y asegurate de que `Dockerfile` y `render.yaml` sean accesibles (o mové el blueprint a la raíz del repo y usá `dockerfilePath`).
+3. Opcional: **Blueprint** — el archivo `render.yaml` define un servicio web Docker con comprobación de salud en `/` y `ASPNETCORE_ENVIRONMENT=Production`.
+4. **SQLite:** el archivo `gameofdrones.db` queda en el sistema de archivos del contenedor. En el plan gratuito de Render ese almacenamiento es **efímero**: al redeploy o reinicio puede perderse. Para datos persistentes habría que montar un [disco](https://render.com/docs/disks) (planes de pago) y apuntar `ConnectionStrings__DefaultConnection` a una ruta bajo el punto de montaje, o usar una base gestionada (por ejemplo PostgreSQL).
+
+Swagger no está habilitado en producción (`ASPNETCORE_ENVIRONMENT=Production`), así que la salud del servicio usa la ruta `/` (SPA).
 
 ---
 
@@ -19,7 +45,7 @@ Solución técnica: **Angular 19** (front) + **ASP.NET Core 8** (API) + **Entity
 | [Node.js](https://nodejs.org/) 18+ (recomendado 20 LTS) | Solo para **compilar** el front la primera vez (o tras cambios en Angular). |
 | Visual Studio 2022 | Recomendado; carga de trabajo *ASP.NET y desarrollo web*. |
 
-> **Nota:** Las carpetas `node_modules`, `bin`, `obj` y el contenido generado de `wwwroot` **no** se suben al repositorio (`.gitignore`). Por eso hace falta **un paso con Node** la primera vez tras clonar.
+Las carpetas `node_modules`, `bin`, `obj` y el contenido generado de `wwwroot` no se versionan (`.gitignore`). Tras clonar hace falta al menos una compilación del front con Node para que la API tenga archivos en `wwwroot`.
 
 ---
 
@@ -60,7 +86,7 @@ Volvé a ejecutar en `ClientApp`:
 npm run build:api
 ```
 
-y reiniciá la API.
+y reiniciá la API. `npm run build` deja el bundle solo en `ClientApp/dist`; para servir la app desde la API hace falta **`build:api`**, que escribe en `Server/GameOfDrones.Api/wwwroot`.
 
 ---
 
@@ -86,9 +112,9 @@ y reiniciá la API.
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/api/rules` | Reglas actuales |
-| PUT | `/api/rules` | Reemplazar reglas |
-| POST | `/api/rules/reset` | Reglas clásicas |
+| GET | `/api/rules` | Reglas de victoria y lista de empates. Cuerpo JSON: `rules` (array de `{ moveName, kills }` por cada arista ganador→vencido) y `ties` (array de `{ moveA, moveB }` por par que empata). |
+| PUT | `/api/rules` | Reemplazo total. Cuerpo: `rules` (obligatorio) y `ties` (opcional; si se omite, no quedan empates entre distintos movimientos). |
+| POST | `/api/rules/reset` | Reglas clásicas (piedra/papel/tijeras) sin empates extra. |
 | GET | `/api/stats` | Victorias acumuladas |
 | POST | `/api/stats/game-won` | Registrar victoria |
 | POST | `/api/rooms` | Crear sala online |

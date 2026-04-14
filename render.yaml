@@ -1,0 +1,12 @@
+services:
+  - type: web
+    runtime: docker
+    name: game-of-drones
+    region: oregon
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production

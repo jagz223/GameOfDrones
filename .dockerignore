@@ -4,6 +4,7 @@
 **/obj
 **/node_modules
 **/dist
+**/Server/GameOfDrones.Api/wwwroot
 **/*.db
 **/*.db-shm
 **/*.db-wal

@@ -304,15 +304,97 @@
     <div *ngIf="phase === 'rules'" class="screen rules">
       <h2>Reglas dinámicas</h2>
       <p class="hint">
-        Cada fila indica qué movimiento derrota a cuál. Puedes añadir más movimientos formando una cadena (como en el ejemplo del enunciado).
+        Cada fila es «ganador mata a perdedor». Todo movimiento que aparezca debe tener al menos una vez rol de ganador y una de perdedor, para que encaje con el resto (piedra, papel, tijeras o los que añadas).
+      </p>
+      <p class="hint" *ngIf="gameMode === 'online'">
+        En online, al guardar las reglas el otro jugador las recibe automáticamente (sincronización por servidor).
       </p>
 
-      <div class="add-row">
-        <input type="text" [(ngModel)]="newKiller" name="nk" placeholder="Movimiento ganador" />
-        <span class="arrow">mata a →</span>
-        <input type="text" [(ngModel)]="newDefeated" name="nd" placeholder="Movimiento derrotado" />
-        <button type="button" (click)="addRuleRow()">Añadir</button>
+      <h3 class="rules-sub">Añadir movimiento nuevo</h3>
+      <p class="hint subtle">
+        Escribe el nombre del movimiento nuevo. Para cada movimiento que ya exista en la tabla (y en empates), indica si el nuevo
+        <strong>le gana</strong>, <strong>pierde contra él</strong> o <strong>empata</strong>. Debes cubrir todos para evitar
+        resultados indefinidos.
+      </p>
+      <div class="add-row add-row--combo">
+        <label class="field-inline">
+          <span>Movimiento</span>
+          <input type="text" [(ngModel)]="newComboMove" name="ncm" placeholder="Nombre nuevo" autocomplete="off" />
+        </label>
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="!partitionComplete() || !newComboMove.trim()"
+          (click)="addNewMoveWithPartition()"
+        >
+          Añadir movimiento
+        </button>
       </div>
+
+      <div class="partition-table" *ngIf="existingMoveNames().length">
+        <p class="hint subtle">Relación del nuevo movimiento con cada uno existente</p>
+        <table class="partition-moves">
+          <thead>
+            <tr>
+              <th>Movimiento existente</th>
+              <th>El nuevo le gana a</th>
+              <th>El nuevo pierde contra</th>
+              <th>Empatan</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let opt of existingMoveNames(); let i = index">
+              <td>{{ opt }}</td>
+              <td>
+                <input
+                  type="radio"
+                  [name]="'pc' + i"
+                  [(ngModel)]="partitionChoice[opt]"
+                  [value]="'beats'"
+                />
+              </td>
+              <td>
+                <input
+                  type="radio"
+                  [name]="'pc' + i"
+                  [(ngModel)]="partitionChoice[opt]"
+                  [value]="'loses'"
+                />
+              </td>
+              <td>
+                <input
+                  type="radio"
+                  [name]="'pc' + i"
+                  [(ngModel)]="partitionChoice[opt]"
+                  [value]="'tie'"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="rules-sub">Empates entre movimientos</h3>
+      <p class="hint subtle">
+        Pueden empatar dos movimientos distintos (no solo el mismo nombre). Al guardar, se envían junto con las reglas de victoria.
+      </p>
+      <table *ngIf="tieDraft.length">
+        <thead>
+          <tr>
+            <th>Movimiento A</th>
+            <th>Movimiento B</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let t of tieDraft; let i = index">
+            <td>{{ t.moveA }}</td>
+            <td>{{ t.moveB }}</td>
+            <td><button type="button" class="link" (click)="removeTieDraftRow(i)">Quitar</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="hint subtle" *ngIf="!tieDraft.length">Aún no hay pares de empate (además del empate por mismo movimiento en la partida).</p>
 
       <table *ngIf="rulesDraft.length">
         <thead>

@@ -9,6 +9,7 @@ import {
   MoveResponse,
   PlayerStat,
   RoomState,
+  TiePair,
 } from '../services/drone-api.service';
 import { validatePlayerDisplayName } from '../utils/player-name';
 
@@ -55,6 +56,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   error: string | null = null;
 
   rules: MoveRule[] = [];
+  tieRules: TiePair[] = [];
   moveOptions: string[] = [];
 
   player1Name = '';
@@ -70,8 +72,9 @@ export class HomeComponent implements OnInit, OnDestroy {
   winnerName: string | null = null;
 
   rulesDraft: KillPair[] = [];
-  newKiller = '';
-  newDefeated = '';
+  tieDraft: TiePair[] = [];
+  newComboMove = '';
+  partitionChoice: Record<string, 'beats' | 'loses' | 'tie' | null> = {};
 
   onlinePlayerRole: 1 | 2 | null = null;
   onlineRoomId = '';
@@ -153,7 +156,8 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.api.getRules().subscribe({
       next: (r) => {
         this.rules = r.rules;
-        this.moveOptions = this.buildMoveOptions(r.rules);
+        this.tieRules = r.ties ?? [];
+        this.moveOptions = this.buildMoveOptionsFromRulesAndTies(r.rules, this.tieRules);
         if (this.moveOptions.length > 0 && !this.currentMove) {
           this.currentMove = this.moveOptions[0];
         }
@@ -529,8 +533,9 @@ export class HomeComponent implements OnInit, OnDestroy {
       return;
     }
     this.rulesDraft = this.rulesFromServer();
-    this.newKiller = '';
-    this.newDefeated = '';
+    this.tieDraft = this.tieRules.map((x) => ({ moveA: x.moveA, moveB: x.moveB }));
+    this.newComboMove = '';
+    this.initPartitionChoices();
     this.phase = 'rules';
     this.clearError();
   }
@@ -540,25 +545,113 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.clearError();
   }
 
-  addRuleRow(): void {
-    const k = this.newKiller.trim();
-    const d = this.newDefeated.trim();
-    if (!k || !d) {
-      this.setError('Indica movimiento ganador y movimiento derrotado.');
+  existingMoveNames(): string[] {
+    const s = new Set<string>();
+    for (const p of this.rulesDraft) {
+      const k = p.killer.trim();
+      const d = p.defeated.trim();
+      if (k) {
+        s.add(k);
+      }
+      if (d) {
+        s.add(d);
+      }
+    }
+    for (const t of this.tieDraft) {
+      const a = t.moveA.trim();
+      const b = t.moveB.trim();
+      if (a) {
+        s.add(a);
+      }
+      if (b) {
+        s.add(b);
+      }
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'es'));
+  }
+
+  partitionComplete(): boolean {
+    const pool = this.existingMoveNames();
+    if (pool.length === 0) {
+      return false;
+    }
+    for (const name of pool) {
+      const c = this.partitionChoice[name];
+      if (c !== 'beats' && c !== 'loses' && c !== 'tie') {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  addNewMoveWithPartition(): void {
+    const pool = this.existingMoveNames();
+    if (pool.length === 0) {
+      this.setError('Añade primero movimientos en la tabla (o empates) para poder enlazar uno nuevo.');
       return;
     }
-    if (k.toLowerCase() === d.toLowerCase()) {
-      this.setError('Un movimiento no puede derrotarse a sí mismo.');
+    if (!this.partitionComplete()) {
+      this.setError('Elige para cada movimiento existente si el nuevo vence, pierde o empata.');
       return;
     }
-    this.rulesDraft = [...this.rulesDraft, { killer: k, defeated: d }];
-    this.newKiller = '';
-    this.newDefeated = '';
+    const m = this.newComboMove.trim();
+    if (!m) {
+      this.setError('Escribe el nombre del movimiento nuevo.');
+      return;
+    }
+    const lower = (x: string) => x.toLowerCase();
+    const poolLc = new Set(pool.map((x) => lower(x)));
+    if (poolLc.has(lower(m))) {
+      this.setError('Ese nombre de movimiento ya existe en las reglas. Elige otro nombre.');
+      return;
+    }
+
+    const newKills: KillPair[] = [];
+    const newTies: TiePair[] = [];
+
+    for (const ex of pool) {
+      const kind = this.partitionChoice[ex];
+      if (kind === 'beats') {
+        newKills.push({ killer: m, defeated: ex });
+      } else if (kind === 'loses') {
+        newKills.push({ killer: ex, defeated: m });
+      } else if (kind === 'tie') {
+        if (this.tieDraftHasPair(m, ex)) {
+          this.setError(`Ya hay un empate registrado entre «${m}» y «${ex}».`);
+          return;
+        }
+        newTies.push(this.normalizedTiePair(m, ex));
+      }
+    }
+
+    let mergedKills = [...this.rulesDraft];
+    for (const p of newKills) {
+      const k = p.killer.trim().toLowerCase();
+      const d = p.defeated.trim().toLowerCase();
+      const dup = mergedKills.some(
+        (x) => x.killer.trim().toLowerCase() === k && x.defeated.trim().toLowerCase() === d,
+      );
+      if (!dup) {
+        mergedKills = [...mergedKills, p];
+      }
+    }
+    this.rulesDraft = mergedKills;
+    this.tieDraft = [...this.tieDraft, ...newTies];
+    this.newComboMove = '';
+    this.initPartitionChoices();
     this.clearError();
+  }
+
+  removeTieDraftRow(i: number): void {
+    this.tieDraft = this.tieDraft.filter((_, idx) => idx !== i);
+    this.initPartitionChoices();
   }
 
   removeRuleRow(i: number): void {
     this.rulesDraft = this.rulesDraft.filter((_, idx) => idx !== i);
+    if (this.phase === 'rules') {
+      this.initPartitionChoices();
+    }
   }
 
   saveRules(): void {
@@ -566,11 +659,17 @@ export class HomeComponent implements OnInit, OnDestroy {
       this.setError('Añade al menos una regla.');
       return;
     }
+    const graphErr = this.validateRulesGraph(this.rulesDraft);
+    if (graphErr) {
+      this.setError(graphErr);
+      return;
+    }
     this.loading = true;
-    this.api.replaceRules({ rules: this.rulesDraft }).subscribe({
+    this.api.replaceRules({ rules: this.rulesDraft, ties: this.tieDraft }).subscribe({
       next: (r) => {
         this.rules = r.rules;
-        this.moveOptions = this.buildMoveOptions(r.rules);
+        this.tieRules = r.ties ?? [];
+        this.moveOptions = this.buildMoveOptionsFromRulesAndTies(r.rules, this.tieRules);
         this.pickDefaultMove();
         this.loading = false;
         this.phase = 'gameover';
@@ -655,12 +754,54 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.clearPoll();
     const tick = () => {
       this.api.getRoomState(this.onlineRoomId, this.onlinePlayerRole!).subscribe({
-        next: (s) => this.applyOnlineRoomState(s),
+        next: (s) => {
+          this.applyOnlineRoomState(s);
+          if (this.gameMode === 'online' && this.phase !== 'rules') {
+            this.syncRulesFromServer();
+          }
+        },
         error: () => {},
       });
     };
     tick();
     this.pollTimer = setInterval(tick, 800);
+  }
+
+  private syncRulesFromServer(): void {
+    this.api.getRules().subscribe({
+      next: (r) => {
+        this.rules = r.rules;
+        this.tieRules = r.ties ?? [];
+        this.moveOptions = this.buildMoveOptionsFromRulesAndTies(r.rules, this.tieRules);
+        this.pickDefaultMove();
+      },
+      error: () => {},
+    });
+  }
+
+  private validateRulesGraph(rules: KillPair[]): string | null {
+    const moves = new Set<string>();
+    for (const p of rules) {
+      const k = p.killer.trim();
+      const d = p.defeated.trim();
+      if (k) {
+        moves.add(k);
+      }
+      if (d) {
+        moves.add(d);
+      }
+    }
+    if (moves.size === 0) {
+      return 'Las reglas no contienen movimientos válidos.';
+    }
+    for (const m of moves) {
+      const winsAgainst = rules.some((p) => p.killer.trim() === m);
+      const losesTo = rules.some((p) => p.defeated.trim() === m);
+      if (!winsAgainst || !losesTo) {
+        return `Cada movimiento debe aparecer al menos una vez como ganador y una vez como derrotado. Revisa «${m}» (falta ${!winsAgainst ? 'a quién vence' : 'quién lo vence'}).`;
+      }
+    }
+    return null;
   }
 
   private applyOnlineRoomState(s: RoomState): void {
@@ -772,7 +913,8 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.api.resetRulesToClassic().subscribe({
       next: (r) => {
         this.rules = r.rules;
-        this.moveOptions = this.buildMoveOptions(r.rules);
+        this.tieRules = r.ties ?? [];
+        this.moveOptions = this.buildMoveOptionsFromRulesAndTies(r.rules, this.tieRules);
         this.pickDefaultMove();
       },
       error: () =>
@@ -784,13 +926,42 @@ export class HomeComponent implements OnInit, OnDestroy {
     return this.rules.map((x) => ({ killer: x.moveName, defeated: x.kills }));
   }
 
-  private buildMoveOptions(list: MoveRule[]): string[] {
+  private buildMoveOptionsFromRulesAndTies(list: MoveRule[], ties: TiePair[]): string[] {
     const set = new Set<string>();
     for (const r of list) {
       set.add(r.moveName);
       set.add(r.kills);
     }
+    for (const t of ties) {
+      set.add(t.moveA);
+      set.add(t.moveB);
+    }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+  }
+
+  private initPartitionChoices(): void {
+    const next: Record<string, 'beats' | 'loses' | 'tie' | null> = {};
+    for (const n of this.existingMoveNames()) {
+      next[n] = null;
+    }
+    this.partitionChoice = next;
+  }
+
+  private tieDraftHasPair(a: string, b: string): boolean {
+    const key = this.makeTieKey(a, b);
+    return this.tieDraft.some((t) => this.makeTieKey(t.moveA, t.moveB) === key);
+  }
+
+  private normalizedTiePair(a: string, b: string): TiePair {
+    const c = a.localeCompare(b, undefined, { sensitivity: 'base' });
+    return c <= 0 ? { moveA: a, moveB: b } : { moveA: b, moveB: a };
+  }
+
+  private makeTieKey(a: string, b: string): string {
+    const c = a.localeCompare(b, undefined, { sensitivity: 'base' });
+    const lo = c <= 0 ? a : b;
+    const hi = c <= 0 ? b : a;
+    return `${lo.toLowerCase()}\u001f${hi.toLowerCase()}`;
   }
 
   private pickDefaultMove(): void {
@@ -804,22 +975,38 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   private evaluateRound(p1Move: string, p2Move: string): 'p1' | 'p2' | 'tie' | 'none' {
-    if (p1Move === p2Move) {
+    if (p1Move.localeCompare(p2Move, undefined, { sensitivity: 'base' }) === 0) {
       return 'tie';
     }
-    const killerToVictim = new Map<string, string>();
-    for (const r of this.rules) {
-      killerToVictim.set(r.moveName, r.kills);
+    const tieKey = this.makeTieKey(p1Move, p2Move);
+    const tieSet = new Set(this.tieRules.map((t) => this.makeTieKey(t.moveA, t.moveB)));
+    if (tieSet.has(tieKey)) {
+      return 'tie';
     }
-    const p1Beats = killerToVictim.get(p1Move);
-    const p2Beats = killerToVictim.get(p2Move);
-    if (p1Beats === p2Move && p2Beats === p1Move) {
+
+    const killerToVictims = new Map<string, Set<string>>();
+    for (const r of this.rules) {
+      const k = r.moveName.toLowerCase();
+      if (!killerToVictims.has(k)) {
+        killerToVictims.set(k, new Set<string>());
+      }
+      killerToVictims.get(k)!.add(r.kills.toLowerCase());
+    }
+
+    const p1 = p1Move.toLowerCase();
+    const p2 = p2Move.toLowerCase();
+    const v1 = killerToVictims.get(p1);
+    const v2 = killerToVictims.get(p2);
+    const p1beatsP2 = v1 != null && v1.has(p2);
+    const p2beatsP1 = v2 != null && v2.has(p1);
+
+    if (p1beatsP2 && p2beatsP1) {
       return 'none';
     }
-    if (p1Beats === p2Move) {
+    if (p1beatsP2) {
       return 'p1';
     }
-    if (p2Beats === p1Move) {
+    if (p2beatsP1) {
       return 'p2';
     }
     return 'none';

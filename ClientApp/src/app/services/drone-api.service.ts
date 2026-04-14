@@ -7,8 +7,14 @@ export interface MoveRule {
   kills: string;
 }
 
+export interface TiePair {
+  moveA: string;
+  moveB: string;
+}
+
 export interface RulesResponse {
   rules: MoveRule[];
+  ties: TiePair[];
 }
 
 export interface KillPair {
@@ -18,6 +24,7 @@ export interface KillPair {
 
 export interface ReplaceRulesRequest {
   rules: KillPair[];
+  ties: TiePair[];
 }
 
 export interface PlayerStat {

@@ -2,7 +2,6 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 
 WORKDIR /src
 
-# Node.js 20 (para compilar Angular)
 RUN apt-get update \
   && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
   && mkdir -p /etc/apt/keyrings \
@@ -14,12 +13,10 @@ RUN apt-get update \
 
 COPY . .
 
-# Build del front dentro de wwwroot del API
 WORKDIR /src/ClientApp
 RUN npm ci
 RUN npm run build:api
 
-# Publish de la API (incluye wwwroot ya generado)
 WORKDIR /src
 RUN dotnet publish Server/GameOfDrones.Api/GameOfDrones.Api.csproj -c Release -o /app/publish
 
@@ -28,6 +25,7 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_ENVIRONMENT=Production
+ENV PORT=8080
 
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "GameOfDrones.Api.dll"]

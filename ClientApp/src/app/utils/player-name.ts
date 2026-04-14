@@ -1,4 +1,3 @@
-/** Normaliza para comparar sin tildes ni mayúsculas. */
 function stripAccents(s: string): string {
   return s.normalize('NFD').replace(/\p{M}/gu, '');
 }
@@ -50,9 +49,6 @@ function tokenize(normalizedAscii: string): string[] {
     .filter((t) => t.length > 0);
 }
 
-/**
- * Devuelve un mensaje de error si el nombre no es válido, o null si está bien.
- */
 export function validatePlayerDisplayName(raw: string): string | null {
   const t = raw.trim();
   if (!t) {
