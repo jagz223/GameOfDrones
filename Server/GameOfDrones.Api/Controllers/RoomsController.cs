@@ -183,11 +183,13 @@ public class RoomsController : ControllerBase
                 room.WinnerName));
         }
 
-        var killerMap = await LoadKillerMap(ct);
+        var killerMap = await LoadKillerVictimsMap(ct);
+        var tieKeys = await LoadTieKeys(ct);
         var (outcome, label) = RoundResolution.Evaluate(
             room.PendingP1Move!,
             room.PendingP2Move!,
             killerMap,
+            tieKeys,
             room.Player1Name,
             room.Player2Name!);
 
@@ -337,22 +339,11 @@ public class RoomsController : ControllerBase
 
     private async Task<HashSet<string>> GetAllowedMoveNames(CancellationToken ct)
     {
-        var rules = await _db.KillRules
-            .AsNoTracking()
-            .Include(k => k.KillerMove)
-            .Include(k => k.DefeatedMove)
-            .ToListAsync(ct);
-
-        var set = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var k in rules)
-        {
-            set.Add(k.KillerMove.Name);
-            set.Add(k.DefeatedMove.Name);
-        }
-        return set;
+        var names = await _db.Moves.AsNoTracking().Select(m => m.Name).ToListAsync(ct);
+        return new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
     }
 
-    private async Task<Dictionary<string, string>> LoadKillerMap(CancellationToken ct)
+    private async Task<Dictionary<string, HashSet<string>>> LoadKillerVictimsMap(CancellationToken ct)
     {
         var rules = await _db.KillRules
             .AsNoTracking()
@@ -360,10 +351,37 @@ public class RoomsController : ControllerBase
             .Include(k => k.DefeatedMove)
             .ToListAsync(ct);
 
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var k in rules)
-            map[k.KillerMove.Name] = k.DefeatedMove.Name;
+        {
+            var killer = k.KillerMove.Name;
+            if (!map.TryGetValue(killer, out var set))
+            {
+                set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                map[killer] = set;
+            }
+
+            set.Add(k.DefeatedMove.Name);
+        }
+
         return map;
+    }
+
+    private async Task<HashSet<string>> LoadTieKeys(CancellationToken ct)
+    {
+        var ties = await _db.TieRules
+            .AsNoTracking()
+            .Include(t => t.MoveA)
+            .Include(t => t.MoveB)
+            .ToListAsync(ct);
+
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var t in ties)
+        {
+            set.Add(RoundResolution.MakeTieKey(t.MoveA.Name, t.MoveB.Name));
+        }
+
+        return set;
     }
 
     private async Task RecordGameWonAsync(string winnerName, CancellationToken ct)

@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
 
     public DbSet<Move> Moves => Set<Move>();
     public DbSet<KillRule> KillRules => Set<KillRule>();
+    public DbSet<TieRule> TieRules => Set<TieRule>();
     public DbSet<PlayerStat> PlayerStats => Set<PlayerStat>();
     public DbSet<GameRoom> GameRooms => Set<GameRoom>();
 
@@ -32,6 +33,19 @@ public class AppDbContext : DbContext
             e.HasOne(x => x.DefeatedMove)
                 .WithMany()
                 .HasForeignKey(x => x.DefeatedMoveId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TieRule>(e =>
+        {
+            e.HasIndex(x => new { x.MoveAId, x.MoveBId }).IsUnique();
+            e.HasOne(x => x.MoveA)
+                .WithMany()
+                .HasForeignKey(x => x.MoveAId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.MoveB)
+                .WithMany()
+                .HasForeignKey(x => x.MoveBId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

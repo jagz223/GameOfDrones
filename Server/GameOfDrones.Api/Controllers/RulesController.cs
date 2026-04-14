@@ -30,7 +30,14 @@ public class RulesController : ControllerBase
             .Select(k => new MoveRuleDto(k.KillerMove.Name, k.DefeatedMove.Name))
             .ToListAsync(ct);
 
-        return Ok(new RulesResponseDto(rules));
+        var ties = await _db.TieRules
+            .AsNoTracking()
+            .Include(t => t.MoveA)
+            .Include(t => t.MoveB)
+            .Select(t => new TiePairDto(t.MoveA.Name, t.MoveB.Name))
+            .ToListAsync(ct);
+
+        return Ok(new RulesResponseDto(rules, ties));
     }
 
     [HttpPut]
@@ -51,6 +58,18 @@ public class RulesController : ControllerBase
             pairs.Add((killer, defeated));
         }
 
+        var tiePairs = new List<(string A, string B)>();
+        foreach (var t in body.Ties ?? Array.Empty<TiePairDto>())
+        {
+            var a = t.MoveA?.Trim() ?? string.Empty;
+            var b = t.MoveB?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
+                return BadRequest("Empate: nombres no válidos.");
+            if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase))
+                return BadRequest("Un movimiento no puede empatar consigo mismo.");
+            tiePairs.Add((a, b));
+        }
+
         var moveNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (k, d) in pairs)
         {
@@ -58,8 +77,15 @@ public class RulesController : ControllerBase
             moveNames.Add(d);
         }
 
+        foreach (var (a, b) in tiePairs)
+        {
+            moveNames.Add(a);
+            moveNames.Add(b);
+        }
+
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
+        _db.TieRules.RemoveRange(_db.TieRules);
         _db.KillRules.RemoveRange(_db.KillRules);
         _db.Moves.RemoveRange(_db.Moves);
         await _db.SaveChangesAsync(ct);
@@ -85,17 +111,37 @@ public class RulesController : ControllerBase
             });
         }
 
+        foreach (var (a, b) in tiePairs)
+        {
+            var ma = nameToMove[a];
+            var mb = nameToMove[b];
+            var first = string.Compare(ma.Name, mb.Name, StringComparison.OrdinalIgnoreCase) < 0 ? ma : mb;
+            var second = ReferenceEquals(first, ma) ? mb : ma;
+            _db.TieRules.Add(new TieRule
+            {
+                MoveAId = first.Id,
+                MoveBId = second.Id
+            });
+        }
+
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        var response = await _db.KillRules
+        var responseRules = await _db.KillRules
             .AsNoTracking()
             .Include(k => k.KillerMove)
             .Include(k => k.DefeatedMove)
             .Select(k => new MoveRuleDto(k.KillerMove.Name, k.DefeatedMove.Name))
             .ToListAsync(ct);
 
-        return Ok(new RulesResponseDto(response));
+        var responseTies = await _db.TieRules
+            .AsNoTracking()
+            .Include(t => t.MoveA)
+            .Include(t => t.MoveB)
+            .Select(t => new TiePairDto(t.MoveA.Name, t.MoveB.Name))
+            .ToListAsync(ct);
+
+        return Ok(new RulesResponseDto(responseRules, responseTies));
     }
 
     [HttpPost("reset")]
@@ -110,6 +156,6 @@ public class RulesController : ControllerBase
             .Select(k => new MoveRuleDto(k.KillerMove.Name, k.DefeatedMove.Name))
             .ToListAsync(ct);
 
-        return Ok(new RulesResponseDto(rules));
+        return Ok(new RulesResponseDto(rules, Array.Empty<TiePairDto>()));
     }
 }

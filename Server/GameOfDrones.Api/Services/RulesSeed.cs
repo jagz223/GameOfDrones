@@ -29,6 +29,7 @@ public static class RulesSeed
     public static async Task ResetToClassicRulesAsync(AppDbContext db, CancellationToken ct = default)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+        db.TieRules.RemoveRange(db.TieRules);
         db.KillRules.RemoveRange(db.KillRules);
         db.Moves.RemoveRange(db.Moves);
         await db.SaveChangesAsync(ct);
