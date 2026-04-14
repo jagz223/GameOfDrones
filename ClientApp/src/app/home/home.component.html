@@ -1,35 +1,200 @@
-<div class="layout">
-  <header class="hero">
+<div class="layout" [class.layout--splash]="phase === 'splash'">
+  <header class="hero" *ngIf="phase !== 'splash'">
     <h1>Juego de Drones</h1>
-    <p class="subtitle">Dos jugadores, un teclado. Primero en ganar 3 rondas es el nuevo emperador.</p>
+    <p class="subtitle">
+      Primero en ganar 3 rondas es el nuevo emperador. Elige modo local o online.
+    </p>
   </header>
 
-  <aside class="panel stats" *ngIf="stats.length">
+  <aside class="panel stats" *ngIf="phase !== 'splash'">
     <h2>Historial de victorias</h2>
-    <p class="hint">Partidas completadas registradas en el servidor.</p>
-    <table>
-      <thead>
-        <tr>
-          <th>Jugador</th>
-          <th>Partidas ganadas</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let s of stats">
-          <td>{{ s.name }}</td>
-          <td>{{ s.gamesWon }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="historial-toggle" role="tablist" aria-label="Tipo de historial">
+      <button
+        type="button"
+        class="historial-toggle__btn"
+        [class.historial-toggle__btn--active]="historialView === 'session'"
+        (click)="setHistorialView('session')"
+        role="tab"
+        [attr.aria-selected]="historialView === 'session'"
+      >
+        Sesión
+      </button>
+      <button
+        type="button"
+        class="historial-toggle__btn"
+        [class.historial-toggle__btn--active]="historialView === 'global'"
+        (click)="setHistorialView('global')"
+        role="tab"
+        [attr.aria-selected]="historialView === 'global'"
+      >
+        Global
+      </button>
+    </div>
+    <button
+      type="button"
+      class="ghost small-btn historial-refresh"
+      *ngIf="historialView === 'global'"
+      [disabled]="statsLoading"
+      (click)="refreshStats(true)"
+    >
+      {{ statsLoading ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+    <p class="hint">{{ historialPanelHint() }}</p>
+
+    <ng-container *ngIf="historialView === 'session'">
+      <table *ngIf="sessionWinCounts().length">
+        <thead>
+          <tr>
+            <th>Jugador</th>
+            <th>Partidas ganadas</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of sessionWinCounts()">
+            <td>{{ row.name }}</td>
+            <td>{{ row.wins }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="empty-stats" *ngIf="!sessionWinCounts().length">Aún no hay victorias en esta sesión.</p>
+    </ng-container>
+
+    <ng-container *ngIf="historialView === 'global'">
+      <p class="empty-stats" *ngIf="statsLoading && !globalWinCounts().length">Cargando ranking…</p>
+      <table *ngIf="globalWinCounts().length">
+        <thead>
+          <tr>
+            <th>Jugador</th>
+            <th>Partidas ganadas</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of globalWinCounts()">
+            <td>{{ row.name }}</td>
+            <td>{{ row.wins }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="empty-stats" *ngIf="!statsLoading && !globalWinCounts().length">Aún no hay datos en el ranking global.</p>
+    </ng-container>
   </aside>
 
-  <section class="panel main-card">
+  <section class="panel main-card" [class.main-card--splash]="phase === 'splash'">
     <p class="error" *ngIf="error">{{ error }}</p>
+
+    <div
+      *ngIf="phase === 'splash'"
+      class="splash-screen"
+      [class.splash-screen--leaving]="splashLeaving"
+    >
+      <div class="splash-screen__inner">
+        <p class="splash-screen__eyebrow">Bienvenido</p>
+        <h2 class="splash-screen__title">Juego de Drones</h2>
+        <p class="splash-screen__lead">
+          Tres rondas ganadas y te proclamas emperador. En local o online, las reglas las controlas tú.
+        </p>
+        <button type="button" class="primary splash-screen__cta" (click)="dismissSplash()">Empezar</button>
+      </div>
+    </div>
 
     <div *ngIf="phase === 'intro'" class="screen">
       <h2>Bienvenida</h2>
-      <p>Compartís el mismo equipo: cada jugador elige su movimiento sin que el otro vea la pantalla.</p>
-      <button type="button" class="primary" (click)="startFlow()">Iniciar</button>
+      <p>Elige cómo van a jugar.</p>
+      <div class="mode-buttons">
+        <button type="button" class="primary mode-btn" (click)="chooseLocalMode()">Misma PC</button>
+        <button type="button" class="secondary mode-btn" (click)="chooseOnlineMode()">Online</button>
+      </div>
+    </div>
+
+    <div *ngIf="phase === 'online-lobby'" class="screen">
+      <h2>Partida online</h2>
+      <p>Un jugador crea la sala y comparte el ID; el otro se une con ese código.</p>
+      <div class="mode-buttons">
+        <button type="button" class="primary mode-btn" (click)="onlineGoCreate()">Crear partida</button>
+        <button type="button" class="secondary mode-btn" (click)="onlineGoJoin()">Unirse</button>
+      </div>
+      <button type="button" class="ghost back-link" (click)="backToModeSelect()">← Volver</button>
+    </div>
+
+    <div *ngIf="phase === 'online-host-name'" class="screen">
+      <h2>Crear sala</h2>
+      <p class="hint">Eres el jugador 1. Después verás el ID para pasárselo al otro.</p>
+      <label class="field">
+        <span>Tu nombre (jugador 1)</span>
+        <input type="text" [(ngModel)]="player1Name" name="onlinep1" autocomplete="off" />
+      </label>
+      <div class="row-actions">
+        <button type="button" class="primary" [disabled]="loading" (click)="onlineSubmitHostName()">
+          {{ loading ? 'Creando…' : 'Crear sala' }}
+        </button>
+        <button type="button" class="ghost" (click)="onlineBackToLobby()">Cancelar</button>
+      </div>
+    </div>
+
+    <div *ngIf="phase === 'online-host-wait'" class="screen">
+      <h2>Esperando al otro jugador</h2>
+      <p>Comparte este ID de sala con el jugador 2:</p>
+      <div class="room-id-box">
+        <code>{{ onlineRoomId }}</code>
+        <button type="button" class="ghost small-btn" (click)="copyRoomId()">Copiar</button>
+      </div>
+      <p class="hint subtle">Cuando el jugador 2 se una con “Unirse”, la partida empieza sola.</p>
+      <button type="button" class="ghost back-link" (click)="onlineBackToLobby()">← Volver al menú online</button>
+    </div>
+
+    <div *ngIf="phase === 'online-join'" class="screen">
+      <h2>Unirse a una sala</h2>
+      <p class="hint">Pídele el ID al jugador 1.</p>
+      <label class="field">
+        <span>ID de sala</span>
+        <input type="text" [(ngModel)]="onlineJoinRoomIdInput" name="onlinerid" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>Tu nombre (jugador 2)</span>
+        <input type="text" [(ngModel)]="onlineJoinNameInput" name="onlinep2" autocomplete="off" />
+      </label>
+      <div class="row-actions">
+        <button type="button" class="primary" [disabled]="loading" (click)="onlineSubmitJoin()">
+          {{ loading ? 'Uniendo…' : 'Unirse y jugar' }}
+        </button>
+        <button type="button" class="ghost" (click)="onlineBackToLobby()">Cancelar</button>
+      </div>
+    </div>
+
+    <div *ngIf="phase === 'online-play' && onlineRoomState" class="screen play online-play">
+      <div class="play-head">
+        <div>
+          <h2>Ronda {{ onlineRoomState.round }}</h2>
+          <p class="turn" *ngIf="onlineShowMovePicker()">
+            Elige tu movimiento (no ves la elección del rival hasta que ambos confirmen).
+          </p>
+          <p class="turn waiting-text" *ngIf="onlineShowWaitingOwnSubmit()">Esperando a que el rival elija…</p>
+        </div>
+        <div class="score-pill">
+          <span>{{ onlineRoomState.player1Name }}: {{ onlineRoomState.p1Wins }}</span>
+          <span class="sep">·</span>
+          <span>{{ onlineRoomState.player2Name }}: {{ onlineRoomState.p2Wins }}</span>
+        </div>
+      </div>
+
+      <div class="resolved-banner" *ngIf="onlineShowResolved() && onlineRoomState.resolvedRound as rr">
+        <h3>Resultado ronda {{ rr.round }}</h3>
+        <p>
+          <strong>{{ onlineRoomState.player1Name }}</strong>: {{ rr.p1Move }} ·
+          <strong>{{ onlineRoomState.player2Name }}</strong>: {{ rr.p2Move }}
+        </p>
+        <p class="result-label">{{ formatRoundOutcomeLabel(rr.label) }}</p>
+      </div>
+
+      <ng-container *ngIf="onlineShowMovePicker()">
+        <label class="field">
+          <span>Tu movimiento</span>
+          <select [(ngModel)]="currentMove" name="onlinemove">
+            <option *ngFor="let m of moveOptions" [ngValue]="m">{{ m }}</option>
+          </select>
+        </label>
+        <button type="button" class="primary" (click)="confirmOnlineMove()">Confirmar</button>
+      </ng-container>
     </div>
 
     <div *ngIf="phase === 'names'" class="screen">
@@ -42,7 +207,10 @@
         <span>Jugador 2</span>
         <input type="text" [(ngModel)]="player2Name" name="p2" autocomplete="off" />
       </label>
-      <button type="button" class="primary" (click)="beginMatch()">Comenzar partida</button>
+      <div class="row-actions">
+        <button type="button" class="primary" (click)="beginMatch()">Comenzar partida</button>
+        <button type="button" class="ghost" (click)="backToModeSelect()">Cambiar modo</button>
+      </div>
     </div>
 
     <div *ngIf="phase === 'play'" class="screen play">
@@ -59,7 +227,7 @@
       </div>
 
       <label class="field">
-        <span>Elegí movimiento</span>
+        <span>Elige movimiento</span>
         <select [(ngModel)]="currentMove" name="move">
           <option *ngFor="let m of moveOptions" [ngValue]="m">{{ m }}</option>
         </select>
@@ -78,16 +246,16 @@
           <tbody>
             <tr *ngFor="let row of roundRows">
               <td>{{ row.round }}</td>
-              <td>{{ row.label }}</td>
+              <td>{{ formatRoundOutcomeLabel(row.label) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <div *ngIf="phase === 'gameover'" class="screen">
+    <div *ngIf="phase === 'gameover' && gameMode === 'local'" class="screen">
       <h2>¡Hay un ganador!</h2>
-      <p class="winner-line"><strong>{{ winnerName }}</strong> es el nuevo emperador.</p>
+      <p class="winner-line">Ganador "{{ winnerName }}" es el nuevo emperador.</p>
       <div class="row-actions">
         <button type="button" class="primary" [disabled]="loading" (click)="playAgain()">
           {{ loading ? 'Guardando…' : 'Jugar de nuevo' }}
@@ -96,10 +264,47 @@
       </div>
     </div>
 
+    <div *ngIf="phase === 'gameover' && gameMode === 'online'" class="screen gameover-online">
+      <h2>¡Hay un ganador!</h2>
+      <p class="winner-line">Ganador "{{ winnerName }}" es el nuevo emperador.</p>
+      <p
+        class="hint rematch-notice"
+        *ngIf="onlineRoomState?.opponentWantsRematch && !onlineRoomState?.youWantRematch"
+      >
+        El rival quiere la revancha.
+      </p>
+      <p class="hint rematch-sent" *ngIf="onlineRoomState?.youWantRematch && !rematchLoading">
+        Tu solicitud de revancha ya está en el servidor; cuando el otro jugador también pulse, empieza la nueva
+        partida.
+      </p>
+      <div class="row-actions column">
+        <button
+          type="button"
+          class="primary"
+          [disabled]="rematchLoading || onlineRoomState?.youWantRematch"
+          (click)="requestRematchOnline()"
+        >
+          {{ rematchButtonLabel() }}
+        </button>
+        <div class="mode-buttons gameover-secondary">
+          <button type="button" class="primary mode-btn" (click)="onlineLeaveToCrear()">Crear partida</button>
+          <button type="button" class="secondary mode-btn" (click)="onlineLeaveToUnirse()">Unirse</button>
+        </div>
+        <button
+          type="button"
+          class="ghost"
+          *ngIf="onlinePlayerRole === 1"
+          (click)="openRules()"
+        >
+          Editar reglas de movimientos
+        </button>
+      </div>
+    </div>
+
     <div *ngIf="phase === 'rules'" class="screen rules">
       <h2>Reglas dinámicas</h2>
       <p class="hint">
-        Cada fila indica qué movimiento derrota a cuál. Podés añadir más movimientos formando una cadena (como en el ejemplo del enunciado).
+        Cada fila indica qué movimiento derrota a cuál. Puedes añadir más movimientos formando una cadena (como en el ejemplo del enunciado).
       </p>
 
       <div class="add-row">
@@ -132,4 +337,6 @@
       </div>
     </div>
   </section>
+
+  <div class="copy-toast" *ngIf="copyToastVisible" aria-live="polite">¡Copiado!</div>
 </div>

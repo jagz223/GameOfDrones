@@ -1,18 +1,35 @@
 # Juego de Drones
 
-Aplicación de evaluación técnica: front-end en **Angular 19** y API en **ASP.NET Core 8** con **Entity Framework Core** y **SQLite**. Incluye reglas de movimientos configurables en tiempo de ejecución y persistencia de victorias por jugador.
+Solución técnica: **Angular 19** (front) + **ASP.NET Core 8** (API) + **Entity Framework Core** + **SQLite**. Incluye partida local (2 jugadores en la misma PC), modo online opcional, reglas de movimientos configurables en tiempo de ejecución y persistencia de victorias por jugador.
 
-## Requisitos
+---
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [Node.js](https://nodejs.org/) 18 o superior (recomendado 20 LTS)
-- Visual Studio 2022 con la carga de trabajo *ASP.NET y desarrollo web* (opcional pero recomendado)
+## Enlace al repositorio y despliegue
 
-## Ejecutar solo con Visual Studio (un solo puerto)
+- **Repositorio (GitHub):** `https://github.com/jagz223/GameOfDrones`
+- **Juego en producción (opcional):** *aún no disponible; se publicará más adelante.*
 
-1. Abre `GameOfDrones.sln`.
-2. Establece **GameOfDrones.Api** como proyecto de inicio.
-3. Una vez clonado el repositorio, en una terminal (solo la primera vez o tras cambiar el front-end):
+---
+
+## Requisitos previos
+
+| Herramienta | Uso |
+|-------------|-----|
+| [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) | Obligatorio (API y migraciones). |
+| [Node.js](https://nodejs.org/) 18+ (recomendado 20 LTS) | Solo para **compilar** el front la primera vez (o tras cambios en Angular). |
+| Visual Studio 2022 | Recomendado; carga de trabajo *ASP.NET y desarrollo web*. |
+
+> **Nota:** Las carpetas `node_modules`, `bin`, `obj` y el contenido generado de `wwwroot` **no** se suben al repositorio (`.gitignore`). Por eso hace falta **un paso con Node** la primera vez tras clonar.
+
+---
+
+## Cómo ejecutarlo desde Visual Studio (recomendado para el corrector)
+
+### Primera vez (clon recién hecho o sin `wwwroot`)
+
+1. Abrí `GameOfDrones.sln`.
+2. Establecé **GameOfDrones.Api** como proyecto de inicio.
+3. En una terminal, **desde la carpeta del repositorio** (donde está `GameOfDrones.sln`):
 
    ```bash
    cd ClientApp
@@ -20,41 +37,80 @@ Aplicación de evaluación técnica: front-end en **Angular 19** y API en **ASP.
    npm run build:api
    ```
 
-   Esto compila Angular dentro de `Server/GameOfDrones.Api/wwwroot/browser`, que es lo que sirve la API como sitio estático.
-4. Pulsa **F5**. Navega a `https://localhost:7185/` (ajusta el puerto si tu `launchSettings.json` es distinto). La base de datos SQLite `gameofdrones.db` se crea automáticamente junto al directorio de trabajo de la API.
+   Eso genera el front en `Server/GameOfDrones.Api/wwwroot/browser`, que es lo que sirve la API.
 
-Swagger está disponible en desarrollo en `/swagger`.
+4. **F5** en Visual Studio.
 
-## Desarrollo en caliente (Angular + API)
+5. Abrí el navegador en la URL que indique la consola (según `launchSettings.json`), por ejemplo:
 
-Útil mientras editas el front-end:
+   - `https://localhost:7185/` — perfil HTTPS local.
+   - `http://0.0.0.0:5185/` o `http://localhost:5185/` — HTTP (útil para probar en red local).
 
-1. Terminal 1 — API:
+La base **SQLite** `gameofdrones.db` se crea o actualiza automáticamente con las migraciones de EF al arrancar la API.
 
-   ```bash
-   cd Server/GameOfDrones.Api
-   dotnet run
-   ```
+### Siguientes veces (sin tocar el front-end)
 
-2. Terminal 2 — Angular con proxy hacia la API (`proxy.conf.json` reenvía `/api` a `https://localhost:7185`):
+Si no cambiaste archivos en `ClientApp`, alcanza con abrir la solución y pulsar **F5**.
 
-   ```bash
-   cd ClientApp
-   npm install
-   npm start
-   ```
+### Si cambiaste solo el Angular
 
-3. Abre `http://localhost:4200`. Las peticiones a `/api` se proxifican al back-end; los orígenes permitidos están en `appsettings.json` → `Cors:ClientOrigins`.
+Volvé a ejecutar en `ClientApp`:
 
-## Reglas dinámicas y datos
+```bash
+npm run build:api
+```
 
-- **GET** `/api/rules` — reglas actuales (movimiento → qué derrota).
-- **PUT** `/api/rules` — reemplaza todas las reglas; el cuerpo usa `{ "rules": [ { "killer": "...", "defeated": "..." } ] }`.
-- **GET** `/api/stats` — victorias acumuladas por jugador.
-- **POST** `/api/stats/game-won` — incrementa victorias del ganador: `{ "winnerName": "..." }`.
+y reiniciá la API.
 
-La cadena de conexión y los orígenes CORS no están hardcodeados en código: se leen de `appsettings.json` / variables de entorno (`ConnectionStrings__DefaultConnection`, etc.).
+---
 
-## Despliegue
+## Problemas frecuentes
 
-Publica la API (`dotnet publish`) y sirve los archivos estáticos generados en `wwwroot/browser`. Asegúrate de ejecutar `npm run build:api` antes de publicar para incluir el front-end.
+| Síntoma | Qué hacer |
+|---------|-----------|
+| La web carga vacía o sin estilos | Ejecutá `npm run build:api` en `ClientApp` (falta el front en `wwwroot`). |
+| Error al migrar la base | Si tenés un `gameofdrones.db` muy viejo, borrálo una vez y volvé a ejecutar la API. |
+| Modo online en otra máquina | Usá la IP del servidor y el puerto **5185**; abrí el firewall TCP para ese puerto. |
+
+---
+
+## Desarrollo con recarga en caliente (opcional)
+
+1. Terminal — API: `cd Server/GameOfDrones.Api` → `dotnet run`
+2. Terminal — Angular: `cd ClientApp` → `npm install` → `npm start`
+3. Navegador: `http://localhost:4200` (el proxy reenvía `/api` según `proxy.conf.json`).
+
+---
+
+## API (resumen)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/rules` | Reglas actuales |
+| PUT | `/api/rules` | Reemplazar reglas |
+| POST | `/api/rules/reset` | Reglas clásicas |
+| GET | `/api/stats` | Victorias acumuladas |
+| POST | `/api/stats/game-won` | Registrar victoria |
+| POST | `/api/rooms` | Crear sala online |
+| POST | `/api/rooms/join` | Unirse |
+| GET | `/api/rooms/{id}` con query `player=1` o `player=2` | Estado de sala |
+| POST | `/api/rooms/{id}/move` | Movimiento |
+| POST | `/api/rooms/{id}/rematch` | Revancha |
+
+En desarrollo, **Swagger** está en `/swagger`.
+
+La cadena de conexión y CORS se configuran en `appsettings.json` o variables de entorno (`ConnectionStrings__DefaultConnection`, etc.).
+
+---
+
+## Publicar en un servidor
+
+1. En `ClientApp`: `npm install` y `npm run build:api`.
+2. `dotnet publish` del proyecto **GameOfDrones.Api**.
+3. Servir el contenido de `wwwroot/browser` como estáticos junto a la API (mismo host que el front).
+
+---
+
+## Licencia / uso
+
+Proyecto de evaluación técnica; ajustá licencia o uso según tu organización.
